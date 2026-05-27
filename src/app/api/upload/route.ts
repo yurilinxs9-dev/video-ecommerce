@@ -27,24 +27,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Arquivo não encontrado' }, { status: 400 })
   }
 
-  if (!file.type.startsWith('video/')) {
-    return NextResponse.json({ error: 'Somente arquivos de vídeo são aceitos' }, { status: 400 })
+  const resource = req.nextUrl.searchParams.get('resource') === 'image' ? 'image' : 'video'
+  const expectedPrefix = resource === 'image' ? 'image/' : 'video/'
+
+  if (!file.type.startsWith(expectedPrefix)) {
+    return NextResponse.json(
+      { error: `Tipo de arquivo inválido. Esperado ${expectedPrefix}*` },
+      { status: 400 }
+    )
   }
 
-  if (file.size > 200 * 1024 * 1024) {
-    return NextResponse.json({ error: 'Arquivo muito grande (máx 200MB)' }, { status: 400 })
+  const maxSize = resource === 'image' ? 10 * 1024 * 1024 : 200 * 1024 * 1024
+  if (file.size > maxSize) {
+    return NextResponse.json(
+      { error: `Arquivo muito grande (máx ${maxSize / 1024 / 1024}MB)` },
+      { status: 400 }
+    )
   }
 
   try {
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
+    const folder = resource === 'image' ? 'video-commerce/posters' : 'video-commerce'
 
     const result = await new Promise<{ secure_url: string; public_id: string; duration?: number }>(
       (resolve, reject) => {
         const stream = cloudinary.uploader.upload_stream(
           {
-            resource_type: 'video',
-            folder: 'video-commerce',
+            resource_type: resource,
+            folder,
             use_filename: true,
             unique_filename: true,
           },
@@ -67,3 +78,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+
+export const config = { api: { bodyParser: false } }
+export const maxDuration = 60
